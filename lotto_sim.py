@@ -219,8 +219,25 @@ def main():
 
     with st.sidebar:
         st.title("⚙️ 추첨 설정")
-        selected_nums = st.multiselect("추첨기에 넣을 번호", list(range(1, 46)), default=list(range(1, 46)))
-        target_count = st.number_input("뽑을 공의 개수", min_value=1, max_value=len(selected_nums) or 1, value=min(6, len(selected_nums) or 6))
+        
+        # 제외수 선택 기능 추가
+        exclude_nums = st.multiselect("🚫 제외할 번호 (제외수)", list(range(1, 46)), help="여기에 선택한 번호는 추첨기에서 제외됩니다.")
+        
+        # 제외수를 제외한 나머지 번호들 계산
+        available_pool = [n for n in range(1, 46) if n not in exclude_nums]
+        
+        selected_nums = st.multiselect("✅ 추첨기에 넣을 번호 (최종)", available_pool, default=available_pool)
+        
+        # 추첨 가능한 번호 개수 계산
+        pool_size = len(selected_nums)
+        
+        if pool_size > 0:
+            # 뽑을 개수가 현재 추첨기에 있는 공의 개수를 넘지 못하도록 max_value를 pool_size로 실시간 제한
+            target_count = st.number_input("뽑을 공의 개수", min_value=1, max_value=pool_size, value=min(6, pool_size))
+        else:
+            st.warning("⚠️ 추첨기에 공이 없습니다. 제외수를 줄여주세요.")
+            target_count = 0
+        
         if st.button("🗑️ 전체 기록 삭제", type="secondary"):
             if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
             st.session_state.history = []
@@ -273,8 +290,8 @@ def main():
             st.rerun()
 
     if start_btn:
-        if len(selected_nums) < target_count:
-            st.error("⚠️ 선택된 번호가 추첨할 개수보다 적습니다.")
+        if target_count == 0 or len(selected_nums) < target_count:
+            st.error("⚠️ 추첨할 공이 부족합니다. 제외수를 확인하거나 번호를 더 선택해주세요.")
         else:
             st.session_state.drawn_result = []
             temp_nums = list(selected_nums)
