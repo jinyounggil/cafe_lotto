@@ -17,6 +17,8 @@ BOUNCE_SOUND = os.path.join(BASE_DIR, "bounce.wav")
 
 # 파일이 없을 경우를 대비한 기본 설정
 if not os.path.exists(HISTORY_FILE):
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         pass
 
@@ -26,6 +28,30 @@ def get_base64_image(image_path):
         with open(image_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
     return None
+
+def get_ball_color(n):
+    """번호에 따른 로또 공 색상을 반환합니다."""
+    if n <= 10: return "#fbc400"  # 노란색
+    if n <= 20: return "#69c8f2"  # 파란색
+    if n <= 30: return "#ff7272"  # 빨간색
+    if n <= 40: return "#aaaaaa"  # 회색
+    return "#b0d840"              # 초록색
+
+@st.cache_data
+def load_history_from_file():
+    """파일에서 추첨 이력을 읽어옵니다."""
+    history = []
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and "]" in line:
+                        t, r = line.split("]", 1)
+                        history.append({"시간": t[1:].strip(), "결과": r.strip()})
+        except Exception as e:
+            st.error(f"이력 로드 중 오류 발생: {e}")
+    return history
 
 @st.cache_data
 def get_base64_audio(file_path):
@@ -166,11 +192,11 @@ def render_machine(balls_to_show, drawn_ones=[], shuffle=False):
             mx, my = random.randint(-70, 70), random.randint(-70, 70)
             shuffle_style = f'--dur:{dur}s; --delay:{delay}s; --mx:{mx}px; --my:{my}px;'
         
-        color = "#fbc400" if n <= 10 else "#69c8f2" if n <= 20 else "#ff7272" if n <= 30 else "#aaaaaa" if n <= 40 else "#b0d840"
+        color = get_ball_color(n)
         html += f'<div class="ball {"shuffling-ball" if shuffle else ""}" style="background-color: {color}; top: {base_top}%; left: {base_left}%; z-index: {i+1}; {shuffle_style}"><span class="ball-text">{n}</span></div>'
     html += '</div><div class="exit-port">'
     for n in drawn_ones:
-        color = "#fbc400" if n <= 10 else "#69c8f2" if n <= 20 else "#ff7272" if n <= 30 else "#aaaaaa" if n <= 40 else "#b0d840"
+        color = get_ball_color(n)
         html += f'<div class="ball drawn-ball" style="background-color: {color}; position: static; display: flex;"><span class="ball-text">{n}</span></div>'
     return html + '</div></div>'
 
@@ -234,21 +260,7 @@ def main():
 
     if 'drawn_result' not in st.session_state: st.session_state.drawn_result = []
     if 'history' not in st.session_state:
-        st.session_state.history = []
-        try:
-            if os.path.exists(HISTORY_FILE):
-                with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                with open(HISTORY_FILE, "r", encoding="utf-8", errors="replace") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line: continue
-                        if "]" in line:
-                            t, r = line.split("]", 1)
-                            st.session_state.history.append({"시간": t[1:].strip(), "결과": r.strip()})
-        except Exception:
-            pass # 이력이 없어도 무시하고 진행
-            st.error("이력 파일을 읽는 중 오류가 발생했습니다.")
-            st.session_state.history = []
+        st.session_state.history = load_history_from_file()
 
     remaining_balls = [n for n in selected_nums if n not in st.session_state.drawn_result]
     machine_placeholder.markdown(render_machine(remaining_balls, st.session_state.drawn_result), unsafe_allow_html=True)
@@ -297,7 +309,11 @@ def main():
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             res_str = ", ".join(map(str, sorted(st.session_state.drawn_result)))
             st.session_state.history.append({"시간": now, "결과": res_str})
-            with open(HISTORY_FILE, "a", encoding="utf-8") as f: f.write(f"[{now}] {res_str}\n")
+            
+            try:
+                with open(HISTORY_FILE, "a", encoding="utf-8") as f: f.write(f"[{now}] {res_str}\n")
+            except Exception as e:
+                st.error(f"파일 기록 중 오류 발생: {e}")
             st.toast(f"축하합니다! 추첨 번호: {res_str}")
 
     st.divider()

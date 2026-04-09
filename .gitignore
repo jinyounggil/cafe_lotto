@@ -1,11 +1,16 @@
 # Python 캐시
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
 
-# 이력 파일 (개인 기록이므로 제외하거나 포함 선택)
-# lotto_history.txt
+# Streamlit & IDE
+.streamlit/
+.vscode/
+.idea/
 
 # OS 파일
 .DS_Store
 Thumbs.db
 desktop.ini
+*.swp
