@@ -14,3 +14,6 @@ __pycache__/
 Thumbs.db
 desktop.ini
 *.swp
+
+# 데이터 파일 (배포 시 제외)
+lotto_history.txt

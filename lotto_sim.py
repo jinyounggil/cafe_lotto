@@ -37,11 +37,10 @@ def get_ball_color(n):
     if n <= 40: return "#aaaaaa"  # 회색
     return "#b0d840"              # 초록색
 
-@st.cache_data
 def load_history_from_file():
-    """파일에서 추첨 이력을 읽어옵니다."""
+    """파일에서 추첨 이력을 읽어옵니다. (배포 환경의 실시간 반영을 위해 캐싱 제거)"""
     history = []
-    if os.path.exists(HISTORY_FILE):
+    if os.path.exists(HISTORY_FILE) and os.path.getsize(HISTORY_FILE) > 0:
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8", errors="replace") as f:
                 for line in f:
@@ -223,6 +222,9 @@ def main():
         # 제외수 선택 기능 추가
         exclude_nums = st.multiselect("🚫 제외할 번호 (제외수)", list(range(1, 46)), help="여기에 선택한 번호는 추첨기에서 제외됩니다.")
         
+        # 고정수 선택 기능 추가
+        fixed_nums = st.multiselect("📌 고정할 번호 (고정수)", [n for n in range(1, 46) if n not in exclude_nums], help="결과에 반드시 포함될 번호입니다.")
+
         # 제외수를 제외한 나머지 번호들 계산
         available_pool = [n for n in range(1, 46) if n not in exclude_nums]
         
@@ -232,8 +234,8 @@ def main():
         pool_size = len(selected_nums)
         
         if pool_size > 0:
-            # 뽑을 개수가 현재 추첨기에 있는 공의 개수를 넘지 못하도록 max_value를 pool_size로 실시간 제한
-            target_count = st.number_input("뽑을 공의 개수", min_value=1, max_value=pool_size, value=min(6, pool_size))
+            # 뽑을 개수가 고정수 개수보다 작지 않도록 제한
+            target_count = st.number_input("뽑을 공의 개수", min_value=max(1, len(fixed_nums)), max_value=pool_size, value=max(min(6, pool_size), len(fixed_nums)))
         else:
             st.warning("⚠️ 추첨기에 공이 없습니다. 제외수를 줄여주세요.")
             target_count = 0
@@ -263,6 +265,7 @@ def main():
                             # 파일에 저장
                             with open(HISTORY_FILE, "a", encoding="utf-8") as f:
                                 f.write(f"[{now}] {res_str}\n")
+                            st.cache_data.clear() # 관련 캐시 초기화
                         except Exception as e:
                             st.error(f"기록 저장 실패: {e}")
                             
@@ -290,11 +293,20 @@ def main():
             st.rerun()
 
     if start_btn:
-        if target_count == 0 or len(selected_nums) < target_count:
+        if target_count == 0:
+            st.error("⚠️ 추첨할 공이 없습니다.")
+        elif not all(num in selected_nums for num in fixed_nums):
+            st.error("⚠️ 고정수가 '추첨기에 넣을 번호'에 포함되어야 합니다.")
+        elif len(selected_nums) < target_count:
             st.error("⚠️ 추첨할 공이 부족합니다. 제외수를 확인하거나 번호를 더 선택해주세요.")
         else:
             st.session_state.drawn_result = []
             temp_nums = list(selected_nums)
+            
+            # 고정수를 포함한 당첨 번호 미리 선정
+            pool_for_random = [n for n in selected_nums if n not in fixed_nums]
+            winners = fixed_nums + random.sample(pool_for_random, int(target_count) - len(fixed_nums))
+            random.shuffle(winners) # 고정수와 일반수가 섞여서 나오도록 셔플
             
             with st.status("🔮 기계가 작동 중입니다. 잠시만 기다려 주세요...", expanded=False) as status:
                 for i in range(int(target_count)):
@@ -303,7 +315,7 @@ def main():
                         machine_placeholder.markdown(render_machine(temp_nums, st.session_state.drawn_result, True), unsafe_allow_html=True)
                         time.sleep(0.1)
                     
-                    pick = random.choice(temp_nums)
+                    pick = winners[i]
                     temp_nums.remove(pick)
                     st.session_state.drawn_result.append(pick)
                     
